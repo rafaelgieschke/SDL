@@ -25,6 +25,11 @@
 #include "../SDL_sysvideo.h"
 #include "SDL_nullframebuffer_c.h"
 
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 #define DUMMY_SURFACE   "_SDL_DummySurface"
 
@@ -52,6 +57,18 @@ int SDL_DUMMY_CreateWindowFramebuffer(_THIS, SDL_Window * window, Uint32 * forma
     SDL_SetWindowData(window, DUMMY_SURFACE, surface);
     *format = surface_format;
     *pixels = surface->pixels;
+    if (SDL_getenv("SDL_VIDEO_DUMMY_FRAMEBUFFER"))
+    {
+        char *path = SDL_getenv("SDL_VIDEO_DUMMY_FRAMEBUFFER");
+        const size_t allocsize = surface->h * surface->pitch;
+        int fd = open(path, O_RDWR | O_CREAT, 0644);
+        if (ftruncate(fd, allocsize))
+            perror("ftruncate");
+        *pixels = mmap(0, allocsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        close(fd);
+        printf("Framebuffer: %s, %i x %i\n", path, w, h);
+        printf("while convert -size %ix%i -depth 8 -alpha off rgba:%s %s.tmp.png; do mv %s.tmp.png %s.png; done\n", w, h, path, path, path, path);
+    }
     *pitch = surface->pitch;
     return 0;
 }
@@ -65,6 +82,12 @@ int SDL_DUMMY_UpdateWindowFramebuffer(_THIS, SDL_Window * window, const SDL_Rect
     if (!surface) {
         return SDL_SetError("Couldn't find dummy surface for window");
     }
+
+    if (SDL_getenv("SDL_VIDEO_DUMMY_UPDATES"))
+        for (int i = 0; i < numrects; i++)
+        {
+            printf("x: %i, y: %i, w: %i, h: %i\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+        }
 
     /* Send the data to the display */
     if (SDL_getenv("SDL_VIDEO_DUMMY_SAVE_FRAMES")) {
